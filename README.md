@@ -26,25 +26,35 @@ DeepSeek Harness（DSH）Web 客户端插件：在右侧栏面板中查询禅道
 
 ## 安装
 
-### 方式一：插件管理器（推荐）
+### 方式一：DSH「添加插件」（推荐）
 
-在具备 `plugin_manager` 工具的 DSH 会话中执行 `install_bundle`，目标为本仓库目录（需先在本地克隆）：
+在 DSH 的 **插件页 → 添加插件** 对话框中直接填入本仓库地址：
+
+```
+https://github.com/legendaryduty/dsh-zentao-bugs
+```
+
+安装器会用 `pnpm` 从 GitHub 拉取本包、加入当前 profile 的 bundles 并重载插件，随后在 **设置 → 禅道** 填入地址与账号即可。包名为 `dsh-zentao-bugs`。
+
+> 提示：本包没有构建步骤（纯 JS + 直接服务的 `client.js`），也不需要网络代理之外的额外配置；若提示无法访问 GitHub，可改用「安装源 / 国内镜像」，或改用下面的本地路径方式。
+
+### 方式二：插件管理器（本地目录）
+
+在具备 `plugin_manager` 工具的 DSH 会话中执行 `install_bundle`，`target` 指向本仓库目录（先克隆）：
 
 ```
 git clone https://github.com/legendaryduty/dsh-zentao-bugs.git
 ```
 
-然后把克隆目录作为 bundle 目标安装。
-
-### 方式二：手动安装到 profile
+### 方式三：手动安装到 profile
 
 1. 克隆本仓库
-2. 把包链接/复制到 profile 的 `node_modules/@local/zentao-bugs`
+2. 把包链接/复制到 profile 的 `node_modules/dsh-zentao-bugs`
 3. 在 profile 的 `package.json` 中：
 
 ```json
-"dependencies": { "@local/zentao-bugs": "0.2.0" },
-"dsh": { "profile": { "bundles": [ "...", "@local/zentao-bugs" ] } }
+"dependencies": { "dsh-zentao-bugs": "0.3.0" },
+"dsh": { "profile": { "bundles": [ "...", "dsh-zentao-bugs" ] } }
 ```
 
 4. 在 profile 的 `cordis.patch.yml` 末尾追加：
@@ -52,7 +62,7 @@ git clone https://github.com/legendaryduty/dsh-zentao-bugs.git
 ```yaml
 - insert:
     - id: zentao-bugs
-      name: '@local/zentao-bugs'
+      name: dsh-zentao-bugs
       config:
         baseUrl: http://zentao.example.com/zentao
         username: your-account
@@ -109,6 +119,8 @@ zentao-bugs/
 ├── index.js           # Host 半：配置 schema、同源 HTTP 路由、禅道会话与代理
 ├── client.js          # 浏览器半：侧栏入口、列表/详情页、设置分区
 ├── cordis.patch.yml   # bundle patch：插入插件行
+├── icon.svg           # 插件卡片图标
+├── locale/{en,zh}.json # 插件卡片标题与描述
 └── package.json       # dsh.bundle / dsh.client 声明
 ```
 

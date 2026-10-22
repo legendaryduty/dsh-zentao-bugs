@@ -1,9 +1,30 @@
 {
-  "name": "@local/zentao-bugs",
-  "version": "0.2.0",
-  "private": true,
+  "name": "dsh-zentao-bugs",
+  "version": "0.3.0",
+  "description": "DSH 插件：在侧栏面板查询禅道「我的地盘 → 指派给我」的 Bug，分页列表与详情（含历史记录、评论与步骤截图）。",
   "type": "module",
-  "exports": { ".": "./index.js", "./client": "./client.js" },
+  "icon": "./icon.svg",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "locale/*.json",
+    "README.md"
+  ],
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "zentao",
+    "禅道",
+    "bug"
+  ],
   "dsh": {
     "bundle": { "patch": "./cordis.patch.yml" },
     "client": {
