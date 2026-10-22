@@ -49,10 +49,12 @@ window.__ModuleLoader__.load({
 
     /** ----------------------------------------------------------------
      * Start-panel icon row (same artwork as icon.svg, themed by currentColor).
+     * The sidebar passes `size` (16 expanded / 18 collapsed), so the glyph
+     * keeps the built-in icons' box and the label stays aligned.
      */
-    function ZenTaoIcon() {
+    function ZenTaoIcon({ size = 16 }) {
       return h('svg', {
-        viewBox: '0 0 1024 1024', width: 20, height: 20, 'aria-hidden': true,
+        viewBox: '0 0 1024 1024', width: size, height: size, 'aria-hidden': true,
         style: { display: 'block' },
       }, h('path', {
         fill: 'currentColor',
