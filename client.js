@@ -10,7 +10,7 @@
  * Host half, so the browser holds no ZenTao credentials.
  */
 window.__ModuleLoader__.load({
-  id: '@local/zentao-bugs',
+  id: 'dsh-zentao-bugs',
   factory(require) {
     const React = require('react');
     const h = React.createElement;

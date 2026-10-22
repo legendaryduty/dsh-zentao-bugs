@@ -1,4 +1,4 @@
 - insert:
     - id: zentao-bugs
-      name: '@local/zentao-bugs'
+      name: dsh-zentao-bugs
       config: {}
