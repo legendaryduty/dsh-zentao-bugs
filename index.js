@@ -20,6 +20,8 @@ export const Config = Schema.object({
     .volatile(),
   username: Schema.string().description('用户名').default('').volatile(),
   password: Schema.string().description('密码').default('').volatile(),
+  showLeftSidebar: Schema.boolean().description('在左侧边栏展示入口').default(true).volatile(),
+  showRightSidebar: Schema.boolean().description('在右侧边栏展示入口').default(true).volatile(),
 });
 
 export function apply(ctx, config) {
