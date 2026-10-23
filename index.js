@@ -179,9 +179,22 @@ export function apply(ctx, config) {
       if (bugsCache.payload && Date.now() - bugsCache.at < 30000) {
         return sendJson(res, 200, bugsCache.payload);
       }
-      const data = await zenGet('/my-work-bug.json');
+      const first = await zenGet('/my-work-bug-assignedTo--id_desc-0-500-1.json');
+      // 禅道该接口的 recPerPage/page 参数只在 PATH_INFO 形式下生效
+      // （my-work-bug-assignedTo--id_desc-<total>-<per>-<page>）。一次取全量；
+      // 若单页容量不够（接口未来收紧上限）再按 pager 翻完剩余页。
+      const pager = first.pager || {};
+      const recTotal = Number(pager.recTotal) || 0;
+      const perPage = Number(pager.recPerPage) || 500;
+      const pageTotal = Math.min(Number(pager.pageTotal) || 1, 50);
+      const rawAll = { ...(first.bugs && typeof first.bugs === 'object' ? first.bugs : {}) };
+      for (let page = 2; page <= pageTotal; page++) {
+        const data = await zenGet(`/my-work-bug-assignedTo--id_desc-${recTotal}-${perPage}-${page}.json`);
+        const rb = data.bugs && typeof data.bugs === 'object' ? data.bugs : {};
+        Object.assign(rawAll, rb);
+      }
       const products = await productNames();
-      const rawBugs = data.bugs && typeof data.bugs === 'object' ? data.bugs : {};
+      const rawBugs = rawAll;
       const bugs = Object.values(rawBugs).map((b) => ({
         id: String(b.id),
         title: String(b.title || ''),

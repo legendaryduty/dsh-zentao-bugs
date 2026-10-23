@@ -18,8 +18,6 @@ window.__ModuleLoader__.load({
     const h = React.createElement;
     const { useCallback, useEffect, useMemo, useState, useSyncExternalStore } = React;
 
-    const PAGE_SIZE = 20;
-
     const SEVERITY = {
       1: { label: 'S1', color: '#dc2626' },
       2: { label: 'S2', color: '#ea580c' },
@@ -76,6 +74,7 @@ window.__ModuleLoader__.load({
       const [list, setList] = useState(null);
       const [error, setError] = useState('');
       const [page, setPage] = useState(1);
+      const [pageSize, setPageSize] = useState(20);
       const [detail, setDetail] = useState(null);
       const [detailLoading, setDetailLoading] = useState(false);
 
@@ -114,20 +113,23 @@ window.__ModuleLoader__.load({
       if (view === 'detail') {
         return h(DetailView, { detail, loading: detailLoading, error, onBack: () => setView('list') });
       }
-      return h(ListView, { list, error, page, setPage, openDetail, onRefresh: loadList });
+      return h(ListView, { list, error, page, setPage, pageSize, setPageSize, openDetail, onRefresh: loadList });
     }
 
-    function ListView({ list, error, page, setPage, openDetail, onRefresh }) {
+    function ListView({ list, error, page, setPage, pageSize, setPageSize, openDetail, onRefresh }) {
       const bugs = (list && list.bugs) || [];
-      const totalPages = Math.max(1, Math.ceil(bugs.length / PAGE_SIZE));
+      const totalPages = Math.max(1, Math.ceil(bugs.length / pageSize));
       const current = Math.min(page, totalPages);
-      const rows = bugs.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
+      const rows = bugs.slice((current - 1) * pageSize, current * pageSize);
 
       const th = { textAlign: 'left', padding: '6px 10px', fontSize: 12, opacity: 0.65, fontWeight: 500, borderBottom: '1px solid var(--dsw-alias-border, rgba(128,128,128,0.3))', whiteSpace: 'nowrap' };
       const td = { padding: '7px 10px', fontSize: 13, borderBottom: '1px solid var(--dsw-alias-border, rgba(128,128,128,0.18))', verticalAlign: 'top' };
+      const pageBtn = (disabled) => ({ all: 'unset', cursor: disabled ? 'default' : 'pointer', fontSize: 13, opacity: disabled ? 0.35 : 0.85 });
+      const selectStyle = { padding: '2px 6px', borderRadius: 6, border: '1px solid var(--dsw-alias-border, rgba(128,128,128,0.35))', background: 'transparent', color: 'inherit', fontSize: 12 };
 
-      return h('div', { style: { height: '100%', overflowY: 'auto', padding: '16px 20px', boxSizing: 'border-box' } },
-        h('div', { style: { display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 12 } },
+      return h('div', { style: { height: '100%', display: 'flex', flexDirection: 'column', padding: '16px 20px', boxSizing: 'border-box' } },
+        // ── 固定头部 ──
+        h('div', { style: { display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 12, flex: '0 0 auto' } },
           h('h1', { style: { fontSize: 17, fontWeight: 600, margin: 0 } }, '禅道 · 指派给我的 Bug'),
           list ? h('span', { style: { fontSize: 12, opacity: 0.55 } }, '共 ' + list.total + ' 条') : null,
           h('span', { style: { flex: 1 } }),
@@ -136,60 +138,74 @@ window.__ModuleLoader__.load({
             style: { all: 'unset', cursor: 'pointer', fontSize: 12, opacity: 0.7 },
           }, '刷新'),
         ),
-        error ? h('div', { style: { color: '#e05666', fontSize: 13, margin: '8px 0' } }, '加载失败：' + error) : null,
-        h('table', { style: { width: '100%', borderCollapse: 'collapse' } },
-          h('thead', null, h('tr', null,
-            h('th', { style: th }, 'ID'),
-            h('th', { style: th }, '严重程度'),
-            h('th', { style: th }, '状态'),
-            h('th', { style: { ...th, width: '45%' } }, '标题'),
-            h('th', { style: th }, '产品'),
-            h('th', { style: th }, ''),
-          )),
-          h('tbody', null, rows.map((b) => {
-            const sev = SEVERITY[b.severity] || SEVERITY[4];
-            const st = STATUS[b.status] || { label: b.status, color: '#6b7280' };
-            return h('tr', { key: b.id },
-              h('td', { style: { ...td, fontFamily: 'monospace', whiteSpace: 'nowrap' } }, '#' + b.id),
-              h('td', { style: td }, badge(sev.label, sev.color)),
-              h('td', { style: td }, badge(st.label, st.color)),
-              h('td', { style: td },
-                h('a', {
-                  href: (list && list.webBase ? list.webBase : '') + '/bug-view-' + b.id + '.html',
-                  target: '_blank', rel: 'noreferrer',
-                  title: '在面板中查看详情',
-                  style: { color: 'inherit', textDecoration: 'none', cursor: 'pointer' },
-                  onClick: (e) => { e.preventDefault(); openDetail(b.id); },
-                }, b.title),
-              ),
-              h('td', { style: { ...td, opacity: 0.8, whiteSpace: 'nowrap' } }, b.productName),
-              h('td', { style: td },
-                h('button', {
-                  type: 'button',
-                  title: '在系统浏览器中打开该 Bug',
-                  onClick: () => window.open((list && list.webBase ? list.webBase : '') + '/bug-view-' + b.id + '.html', '_blank'),
-                  style: {
-                    all: 'unset', cursor: 'pointer', fontSize: 12,
-                    color: 'var(--dsw-alias-link, #3b82f6)', whiteSpace: 'nowrap',
-                  },
-                }, '详情'),
-              ),
-            );
-          })),
+        error ? h('div', { style: { color: '#e05666', fontSize: 13, margin: '8px 0', flex: '0 0 auto' } }, '加载失败：' + error) : null,
+        // ── 列表：占满剩余空间，空间不够时内部滚动 ──
+        h('div', { style: { flex: 1, minHeight: 0, overflowY: 'auto' } },
+          h('table', { style: { width: '100%', borderCollapse: 'collapse' } },
+            h('thead', null, h('tr', null,
+              h('th', { style: { ...th, position: 'sticky', top: 0, background: 'var(--dsw-alias-panel, var(--dsw-specific-panel, inherit))' } }, 'ID'),
+              h('th', { style: { ...th, position: 'sticky', top: 0 } }, '严重程度'),
+              h('th', { style: { ...th, position: 'sticky', top: 0 } }, '状态'),
+              h('th', { style: { ...th, width: '45%', position: 'sticky', top: 0 } }, '标题'),
+              h('th', { style: { ...th, position: 'sticky', top: 0 } }, '产品'),
+              h('th', { style: { ...th, position: 'sticky', top: 0 } }, ''),
+            )),
+            h('tbody', null, rows.map((b) => {
+              const sev = SEVERITY[b.severity] || SEVERITY[4];
+              const st = STATUS[b.status] || { label: b.status, color: '#6b7280' };
+              return h('tr', { key: b.id },
+                h('td', { style: { ...td, fontFamily: 'monospace', whiteSpace: 'nowrap' } }, '#' + b.id),
+                h('td', { style: td }, badge(sev.label, sev.color)),
+                h('td', { style: td }, badge(st.label, st.color)),
+                h('td', { style: td },
+                  h('a', {
+                    href: (list && list.webBase ? list.webBase : '') + '/bug-view-' + b.id + '.html',
+                    target: '_blank', rel: 'noreferrer',
+                    title: '在面板中查看详情',
+                    style: { color: 'inherit', textDecoration: 'none', cursor: 'pointer' },
+                    onClick: (e) => { e.preventDefault(); openDetail(b.id); },
+                  }, b.title),
+                ),
+                h('td', { style: { ...td, opacity: 0.8, whiteSpace: 'nowrap' } }, b.productName),
+                h('td', { style: td },
+                  h('button', {
+                    type: 'button',
+                    title: '在系统浏览器中打开该 Bug',
+                    onClick: () => window.open((list && list.webBase ? list.webBase : '') + '/bug-view-' + b.id + '.html', '_blank'),
+                    style: {
+                      all: 'unset', cursor: 'pointer', fontSize: 12,
+                      color: 'var(--dsw-alias-link, #3b82f6)', whiteSpace: 'nowrap',
+                    },
+                  }, '详情'),
+                ),
+              );
+            })),
+          ),
+          !list && !error ? h('div', { style: { padding: '20px 0', opacity: 0.55, fontSize: 13 } }, '加载中…') : null,
+          list && bugs.length === 0 ? h('div', { style: { padding: '20px 0', opacity: 0.55, fontSize: 13 } }, '没有指派给你的未关闭 Bug。') : null,
         ),
-        !list && !error ? h('div', { style: { padding: '20px 0', opacity: 0.55, fontSize: 13 } }, '加载中…') : null,
-        list && bugs.length === 0 ? h('div', { style: { padding: '20px 0', opacity: 0.55, fontSize: 13 } }, '没有指派给你的未关闭 Bug。') : null,
-        list && totalPages > 1 ? h('div', { style: { display: 'flex', alignItems: 'center', gap: 14, justifyContent: 'center', padding: '14px 0' } },
+        // ── 固定底部分页条 ──
+        h('div', { style: { flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: 14, paddingTop: 10, marginTop: 2, borderTop: '1px solid var(--dsw-alias-border, rgba(128,128,128,0.25))' } },
+          h('span', { style: { fontSize: 12, opacity: 0.65 } }, '共 ' + bugs.length + ' 条'),
+          h('span', { style: { flex: 1 } }),
           h('button', {
             type: 'button', disabled: current <= 1, onClick: () => setPage(current - 1),
-            style: { all: 'unset', cursor: current <= 1 ? 'default' : 'pointer', fontSize: 13, opacity: current <= 1 ? 0.35 : 0.85 },
+            style: pageBtn(current <= 1),
           }, '‹ 上一页'),
-          h('span', { style: { fontSize: 12, opacity: 0.65 } }, current + ' / ' + totalPages),
+          h('span', { style: { fontSize: 12, opacity: 0.65, whiteSpace: 'nowrap' } }, current + ' / ' + totalPages),
           h('button', {
             type: 'button', disabled: current >= totalPages, onClick: () => setPage(current + 1),
-            style: { all: 'unset', cursor: current >= totalPages ? 'default' : 'pointer', fontSize: 13, opacity: current >= totalPages ? 0.35 : 0.85 },
+            style: pageBtn(current >= totalPages),
           }, '下一页 ›'),
-        ) : null,
+          h('label', { style: { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, opacity: 0.75 } },
+            '每页',
+            h('select', {
+              value: pageSize,
+              onChange: (e) => { setPageSize(Number(e.target.value) || 20); setPage(1); },
+              style: selectStyle,
+            }, [20, 50, 100].map((n) => h('option', { value: n, key: n }, n))),
+            '条'),
+        ),
       );
     }
 
