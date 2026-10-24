@@ -31,7 +31,7 @@ DeepSeek Harness（DSH）Web 客户端插件：在右侧栏面板中查询禅道
 在 DSH 的 **插件页 → 添加插件** 对话框中直接填入本仓库地址：
 
 ```
-https://github.com/legendaryduty/dsh-zentao-bugs
+https://github.com/sad-marmot/dsh-zentao-bugs
 ```
 
 安装器会用 `pnpm` 从 GitHub 拉取本包、加入当前 profile 的 bundles 并重载插件，随后在 **设置 → 禅道** 填入地址与账号即可。包名为 `dsh-zentao-bugs`。
@@ -43,7 +43,7 @@ https://github.com/legendaryduty/dsh-zentao-bugs
 在具备 `plugin_manager` 工具的 DSH 会话中执行 `install_bundle`，`target` 指向本仓库目录（先克隆）：
 
 ```
-git clone https://github.com/legendaryduty/dsh-zentao-bugs.git
+git clone https://github.com/sad-marmot/dsh-zentao-bugs.git
 ```
 
 ### 方式三：手动安装到 profile
