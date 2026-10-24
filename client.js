@@ -334,6 +334,10 @@ window.__ModuleLoader__.load({
       const value = (snap && snap.value) || {};
       const [saved, setSaved] = useState(null);
       const [confirmClear, setConfirmClear] = useState(false);
+      // 输入框为受控组件：草稿跟随用户输入，配置被清空时重置为空。
+      const [drafts, setDrafts] = useState({});
+      const draftOf = (field) => drafts[field] !== undefined ? drafts[field] : (value[field] || '');
+      const setDraft = (field, v) => setDrafts((d) => ({ ...d, [field]: v }));
 
       const inputStyle = { padding: '5px 9px', borderRadius: 6, border: '1px solid var(--dsw-alias-border, rgba(128,128,128,0.35))', background: 'transparent', color: 'inherit', minWidth: 0, flex: 1, fontSize: 13 };
       const rowStyle = { display: 'flex', gap: 10, alignItems: 'center', maxWidth: 560 };
@@ -359,6 +363,7 @@ window.__ModuleLoader__.load({
             { op: 'unset', path: ['username'] },
             { op: 'unset', path: ['password'] },
           ], snap.revision);
+          if (resp.ok) setDrafts({});
           setSaved({ ok: !!resp.ok, msg: resp.ok ? '配置已清空。请重新填写禅道地址、用户名和密码。' : ('清空被拒: ' + ((resp.error && resp.error.message) || JSON.stringify(resp.error))) });
         } catch (err) {
           setSaved({ ok: false, msg: '清空异常: ' + String((err && err.message) || err) });
@@ -376,34 +381,34 @@ window.__ModuleLoader__.load({
         h('span', { style: { fontSize: 13 } }, text),
       );
 
-      // 输入框为非受控组件：配置被清空时用 key 强制重建，让输入框显示新值。
-      const inputsKey = [value.baseUrl, value.username, value.password].map((v) => (v ? '1' : '0')).join('');
-
       return h('div', { style: { position: 'relative', padding: '4px 2px', maxWidth: 640, height: '100%', overflowY: 'auto', boxSizing: 'border-box' } },
         h('h2', { style: { fontSize: 16, fontWeight: 600, margin: '0 0 4px' } }, '禅道'),
         h('div', { style: { fontSize: 12, opacity: 0.65, marginBottom: 14 } },
           '配置禅道内网地址和账号。凭据保存在本机配置文件中（明文），仅用于本机向禅道发起查询。'),
-        h('div', { key: inputsKey, style: { display: 'flex', flexDirection: 'column', gap: 10 } },
+        h('div', { style: { display: 'flex', flexDirection: 'column', gap: 10 } },
           h('div', { style: rowStyle },
             h('label', { style: labelStyle }, '禅道地址'),
             h('input', {
-              style: inputStyle, defaultValue: value.baseUrl || '',
+              style: inputStyle, value: draftOf('baseUrl'),
               placeholder: 'http://zentao.example.com/zentao',
-              onBlur: (e) => { if (e.target.value !== (value.baseUrl || '')) save('baseUrl', e.target.value.trim()); },
+              onChange: (e) => setDraft('baseUrl', e.target.value),
+              onBlur: (e) => { const v = e.target.value.trim(); if (v !== (value.baseUrl || '')) save('baseUrl', v); },
             }),
           ),
           h('div', { style: rowStyle },
             h('label', { style: labelStyle }, '用户名'),
             h('input', {
-              style: inputStyle, defaultValue: value.username || '',
-              onBlur: (e) => { if (e.target.value !== (value.username || '')) save('username', e.target.value.trim()); },
+              style: inputStyle, value: draftOf('username'),
+              onChange: (e) => setDraft('username', e.target.value),
+              onBlur: (e) => { const v = e.target.value.trim(); if (v !== (value.username || '')) save('username', v); },
             }),
           ),
           h('div', { style: rowStyle },
             h('label', { style: labelStyle }, '密码'),
             h('input', {
-              type: 'password', style: inputStyle, defaultValue: value.password || '',
+              type: 'password', style: inputStyle, value: draftOf('password'),
               placeholder: '输入后点击其他位置保存',
+              onChange: (e) => setDraft('password', e.target.value),
               onBlur: (e) => { if (e.target.value !== (value.password || '')) save('password', e.target.value); },
             }),
           ),
