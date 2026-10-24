@@ -18,6 +18,10 @@ window.__ModuleLoader__.load({
     const h = React.createElement;
     const { useCallback, useEffect, useMemo, useState, useSyncExternalStore } = React;
 
+    /** The plugin's settings form, assigned during apply(); panels read the
+     *  credential snapshot from it to react to changes (incl. clearing). */
+    let settingsForm = null;
+
     const SEVERITY = {
       1: { label: 'S1', color: '#dc2626' },
       2: { label: 'S2', color: '#ea580c' },
@@ -92,6 +96,20 @@ window.__ModuleLoader__.load({
       }, []);
 
       useEffect(() => { loadList(); }, [loadList]);
+
+      // 凭据/地址变化（含清空配置）时自动重新拉取：
+      // 清空后面板立即转为报错状态，不再显示旧数据。
+      const credSnap = useSyncExternalStore(
+        (cb) => settingsForm.subscribe(cb),
+        () => settingsForm.getSnapshot(),
+        () => settingsForm.getSnapshot(),
+      );
+      const credKey = [
+        credSnap && credSnap.value && credSnap.value.baseUrl,
+        credSnap && credSnap.value && credSnap.value.username,
+        credSnap && credSnap.value && credSnap.value.password,
+      ].map((v) => (v ? '1' : '0')).join('');
+      useEffect(() => { loadList(); }, [credKey, loadList]);
 
       const openDetail = useCallback(async (id) => {
         setView('detail');
@@ -315,10 +333,12 @@ window.__ModuleLoader__.load({
       );
       const value = (snap && snap.value) || {};
       const [saved, setSaved] = useState(null);
+      const [confirmClear, setConfirmClear] = useState(false);
 
       const inputStyle = { padding: '5px 9px', borderRadius: 6, border: '1px solid var(--dsw-alias-border, rgba(128,128,128,0.35))', background: 'transparent', color: 'inherit', minWidth: 0, flex: 1, fontSize: 13 };
       const rowStyle = { display: 'flex', gap: 10, alignItems: 'center', maxWidth: 560 };
       const labelStyle = { fontSize: 12, opacity: 0.75, flex: '0 0 96px' };
+      const btnStyle = { all: 'unset', cursor: 'pointer', fontSize: 13, padding: '6px 16px', borderRadius: 8, border: '1px solid var(--dsw-alias-border, rgba(128,128,128,0.35))' };
 
       const save = async (field, v) => {
         try {
@@ -327,6 +347,21 @@ window.__ModuleLoader__.load({
           setSaved({ ok: !!resp.ok, msg: resp.ok ? '已保存。' : ('保存被拒: ' + ((resp.error && resp.error.message) || JSON.stringify(resp.error))) });
         } catch (err) {
           setSaved({ ok: false, msg: '保存异常: ' + String((err && err.message) || err) });
+        }
+        setTimeout(() => setSaved(null), 8000);
+      };
+
+      const clearConfig = async () => {
+        setConfirmClear(false);
+        try {
+          const resp = await ctx.remote.settings.mutate('zentao-bugs', [
+            { op: 'unset', path: ['baseUrl'] },
+            { op: 'unset', path: ['username'] },
+            { op: 'unset', path: ['password'] },
+          ], snap.revision);
+          setSaved({ ok: !!resp.ok, msg: resp.ok ? '配置已清空。请重新填写禅道地址、用户名和密码。' : ('清空被拒: ' + ((resp.error && resp.error.message) || JSON.stringify(resp.error))) });
+        } catch (err) {
+          setSaved({ ok: false, msg: '清空异常: ' + String((err && err.message) || err) });
         }
         setTimeout(() => setSaved(null), 8000);
       };
@@ -341,11 +376,14 @@ window.__ModuleLoader__.load({
         h('span', { style: { fontSize: 13 } }, text),
       );
 
-      return h('div', { style: { padding: '4px 2px', maxWidth: 640, height: '100%', overflowY: 'auto', boxSizing: 'border-box' } },
+      // 输入框为非受控组件：配置被清空时用 key 强制重建，让输入框显示新值。
+      const inputsKey = [value.baseUrl, value.username, value.password].map((v) => (v ? '1' : '0')).join('');
+
+      return h('div', { style: { position: 'relative', padding: '4px 2px', maxWidth: 640, height: '100%', overflowY: 'auto', boxSizing: 'border-box' } },
         h('h2', { style: { fontSize: 16, fontWeight: 600, margin: '0 0 4px' } }, '禅道'),
         h('div', { style: { fontSize: 12, opacity: 0.65, marginBottom: 14 } },
           '配置禅道内网地址和账号。凭据保存在本机配置文件中（明文），仅用于本机向禅道发起查询。'),
-        h('div', { style: { display: 'flex', flexDirection: 'column', gap: 10 } },
+        h('div', { key: inputsKey, style: { display: 'flex', flexDirection: 'column', gap: 10 } },
           h('div', { style: rowStyle },
             h('label', { style: labelStyle }, '禅道地址'),
             h('input', {
@@ -369,11 +407,45 @@ window.__ModuleLoader__.load({
               onBlur: (e) => { if (e.target.value !== (value.password || '')) save('password', e.target.value); },
             }),
           ),
+          h('div', { style: { display: 'flex', justifyContent: 'flex-start' } },
+            h('button', {
+              type: 'button',
+              onClick: () => setConfirmClear(true),
+              disabled: !(value.baseUrl || value.username || value.password),
+              title: '清空禅道地址、用户名和密码',
+              style: { all: 'unset', cursor: !(value.baseUrl || value.username || value.password) ? 'default' : 'pointer', fontSize: 12, color: '#e05666', opacity: (value.baseUrl || value.username || value.password) ? 0.9 : 0.4 },
+            }, '清空配置'),
+          ),
           switchRow('左侧边栏', 'showLeftSidebar', '在左侧边栏展示入口'),
           switchRow('右侧边栏', 'showRightSidebar', '在右侧边栏展示入口'),
         ),
         h('div', { style: { fontSize: 12, opacity: 0.55, marginTop: 10, height: 16 } },
           saved ? (saved.ok ? saved.msg : h('span', { style: { color: '#e05666' } }, saved.msg)) : '修改后自动保存；开关即时生效。'),
+        confirmClear ? h('div', {
+          onClick: (e) => { if (e.target === e.currentTarget) setConfirmClear(false); },
+          style: { position: 'absolute', inset: 0, zIndex: 20, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10 },
+        },
+          h('div', {
+            role: 'dialog', 'aria-modal': true, 'aria-label': '清空配置',
+            style: {
+              background: 'var(--dsw-alias-button-elevated-fill, #2b2b30)', color: 'inherit',
+              borderRadius: 10, padding: '18px 20px', maxWidth: 380, width: '86%',
+              border: '1px solid var(--dsw-alias-border, rgba(128,128,128,0.3))',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+            },
+          },
+            h('div', { style: { fontSize: 14, fontWeight: 600, marginBottom: 8 } }, '清空配置'),
+            h('div', { style: { fontSize: 13, lineHeight: 1.6, marginBottom: 16, opacity: 0.85 } },
+              '将清空禅道地址、用户名和密码，禅道面板将无法查询数据；重新填写后才能恢复使用。确定要清空吗？'),
+            h('div', { style: { display: 'flex', gap: 10, justifyContent: 'flex-end' } },
+              h('button', { type: 'button', style: btnStyle, onClick: () => setConfirmClear(false) }, '取消'),
+              h('button', {
+                type: 'button', onClick: clearConfig,
+                style: { ...btnStyle, background: '#dc2626', borderColor: '#dc2626', color: '#fff' },
+              }, '确认清空'),
+            ),
+          ),
+        ) : null,
       );
     }
 
@@ -436,6 +508,7 @@ window.__ModuleLoader__.load({
       inject: ['slots', 'configForms', 'sidebarRightTabs', 'remote', 'remote.settings'],
       apply(ctx) {
         const form = ctx.configForms.get('zentao-bugs');
+        settingsForm = form;
 
         // 两个入口跟随设置开关，配置变化时先注销再按需重注册。
         ctx.effect(() => {

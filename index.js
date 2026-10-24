@@ -41,12 +41,24 @@ export function apply(ctx, config) {
    * API conventions; a Cookie header is sent as well for safety).
    */
   let sid = null;
+  /** The credential triple this sid was logged in with. A mismatch forces
+   *  re-login, so switching or clearing accounts can never reuse an old
+   *  user's session. */
+  let sidCreds = null;
 
   /** Read a config value; Schemastery `.volatile()` fields are live accessors with `.get()`. */
   function cfg(key) {
     const v = config ? config[key] : undefined;
     if (v && typeof v === 'object' && typeof v.get === 'function') return v.get();
     return v;
+  }
+
+  function credsKey() {
+    return [cfg('baseUrl'), cfg('username'), cfg('password')].map((v) => String(v ?? '')).join('\u0000');
+  }
+
+  function sessionValid() {
+    return !!sid && sidCreds === credsKey();
   }
 
   function base() {
@@ -92,13 +104,17 @@ export function apply(ctx, config) {
     });
     const lenv = await lr.json();
     if (lenv.status !== 'success' || String(lenv.locate || '').includes('user-login')) {
+      sid = null;
+      sidCreds = null;
       throw new Error('禅道登录失败，请检查设置中的用户名和密码');
     }
+    sidCreds = credsKey();
   }
 
-  /** GET a ZenTao JSON page; re-login once when the session has expired. */
+  /** GET a ZenTao JSON page; re-login when the session is missing, bound to
+   *  different credentials, or has expired. */
   async function zenGet(pathname) {
-    if (!sid) await login();
+    if (!sessionValid()) await login();
     let env = await raw(pathname);
     let data = typeof env.data === 'string' ? JSON.parse(env.data) : env.data;
     const loggedOut = env.status !== 'success'
@@ -130,7 +146,7 @@ export function apply(ctx, config) {
   async function fileBytes(name) {
     const hit = fileCache.get(name);
     if (hit && Date.now() - hit.at < 5 * 60 * 1000) return hit;
-    if (!sid) await login();
+    if (!sessionValid()) await login();
     const url = base() + '/' + name + '?zentaosid=' + sid;
     let res = await fetch(url, {
       headers: { Cookie: 'zentaosid=' + sid },
@@ -175,8 +191,13 @@ export function apply(ctx, config) {
 
   async function handle(req, res) {
     const { pathname } = new URL(req.url, 'http://x');
+    // 配置不完整一律拒绝查询（清空配置后即使旧会话未过期也不可再用）。
+    if (!cfg('baseUrl') || !cfg('username') || !cfg('password')) {
+      return sendJson(res, 400, { error: '请先在「设置 → 禅道」中完整配置禅道地址、用户名和密码' });
+    }
     if (pathname === '/zentao-plugin/bugs') {
-      if (bugsCache.payload && Date.now() - bugsCache.at < 30000) {
+      const ck = credsKey();
+      if (bugsCache.payload && bugsCache.ck === ck && Date.now() - bugsCache.at < 30000) {
         return sendJson(res, 200, bugsCache.payload);
       }
       const first = await zenGet('/my-work-bug-assignedTo--id_desc-0-500-1.json');
@@ -207,7 +228,7 @@ export function apply(ctx, config) {
         openedDate: String(b.openedDate || ''),
       })).sort((a, b) => Number(b.id) - Number(a.id));
       const payload = { bugs, total: bugs.length, webBase: base() };
-      bugsCache = { at: Date.now(), payload };
+      bugsCache = { at: Date.now(), payload, ck };
       return sendJson(res, 200, payload);
     }
     // ZenTao attachment/step image: proxied so the browser needs no ZenTao session.
